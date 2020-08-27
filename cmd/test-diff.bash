@@ -1,6 +1,9 @@
 #!/usr/local/bin/bash
 
 go build
+
+#./cmd -s &
+ 
 rm *.debug
 for i in `ls .`;
 do

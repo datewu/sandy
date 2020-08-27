@@ -6,16 +6,16 @@ import (
 )
 
 const (
-	magicEOF    = `"@4'`
-	firstLen    = 8
-	bufSize     = 1024
-	readTimeout = 5 * time.Second
+	hangUPEOF      = `"@4'`
+	handshakeSize  = 8
+	bufSize        = 1024
+	readUDPTimeout = 8 * time.Second
 )
 
-func filesAccessor() (chan<- *request, chan<- *gettter, chan<- string) {
-	reqs := make(chan *request)
-	filesPool := make(map[string]*request)
-	getStream := make(chan *gettter)
+func globalStreams() (chan<- *udpClient, chan<- *streamToken, chan<- string) {
+	reqs := make(chan *udpClient)
+	filesPool := make(map[string]*udpClient)
+	getStream := make(chan *streamToken)
 	delStream := make(chan string)
 	go func() {
 		for {
@@ -25,10 +25,7 @@ func filesAccessor() (chan<- *request, chan<- *gettter, chan<- string) {
 					return
 				}
 				filesPool[f.id] = f
-				//log.Info().Int("size", len(filesPool)).Msg("current pool size")
-				//go func() {
 				f.ready <- struct{}{}
-				//	}()
 			case g, ok := <-getStream:
 				if !ok {
 					return

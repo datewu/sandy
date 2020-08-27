@@ -42,20 +42,20 @@ func Upload(server string, p *Peanut) {
 		}
 	}()
 	sf := p.Name + "padding"
-	_, err = conn.Write([]byte(sf[:firstLen]))
+	_, err = conn.Write([]byte(sf[:handshakeSize]))
 	if err != nil {
 		log.Println("conn write failed")
 		return
 	}
 
-	var rBuf [firstLen]byte // must receive firstLen bytes before send file
-	conn.SetReadDeadline(time.Now().Add(2 * readTimeout))
+	var rBuf [handshakeSize]byte // must receive firstLen bytes before send file
+	conn.SetReadDeadline(time.Now().Add(2 * readUDPTimeout))
 	_, _, err = conn.ReadFromUDP(rBuf[:])
 	if err != nil {
 		log.Println("readFromUDP failed")
 		return
 	}
-	if string(rBuf[:]) != sf[:firstLen] {
+	if string(rBuf[:]) != sf[:handshakeSize] {
 		log.Println("do not get 'fileName' back")
 		return
 	}
@@ -80,7 +80,7 @@ func Upload(server string, p *Peanut) {
 			log.Println("conn write failed")
 			return
 		}
-		conn.SetReadDeadline(time.Now().Add(readTimeout))
+		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
 		_, _, err = conn.ReadFromUDP(progress[:])
 		if err != nil {
 			log.Println("readFromUDP failed, cannot show progress")
@@ -100,7 +100,7 @@ func Upload(server string, p *Peanut) {
 		size/1024,
 		100*float64(accumulated)/float64(size))
 	log.Println("file send finished")
-	_, err = conn.Write([]byte(magicEOF))
+	_, err = conn.Write([]byte(hangUPEOF))
 	if err != nil {
 		log.Println("conn read failed")
 		return

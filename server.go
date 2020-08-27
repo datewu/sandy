@@ -28,21 +28,21 @@ func Server(addr string, getStorage FaceMouther) {
 		log.Println("listen failed")
 		return
 	}
-	requests, getter, del := filesAccessor()
+	requests, getter, del := globalStreams()
 	defer func() {
 		close(requests)
 		close(getter)
 		close(del)
 	}()
 	opts := &handlerOpts{
-		buf:     [firstLen]byte{},
+		buf:     [handshakeSize]byte{},
 		storage: requests,
 		get:     getter,
 		del:     del,
 	}
 	for {
 		opts.addr = nil
-		opts.buf = [firstLen]byte{}
+		opts.buf = [handshakeSize]byte{}
 		go handleUPload(conn, opts, getStorage)
 		globalForWG.Add(1)
 		globalForWG.Wait()
@@ -55,7 +55,7 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 	}()
 	var err error
 	if opts.addr == nil {
-		conn.SetReadDeadline(time.Now().Add(5 * 12 * readTimeout))
+		conn.SetReadDeadline(time.Now().Add(5 * 12 * readUDPTimeout))
 		_, opts.addr, err = conn.ReadFromUDP(opts.buf[:])
 		if err != nil {
 			log.Println("readfromUDP failed")
@@ -73,7 +73,7 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 	ready := make(chan struct{})
 	defer close(ready) // TODO should close on send side
 	done := make(chan struct{})
-	opts.storage <- &request{
+	opts.storage <- &udpClient{
 		id:    opts.addr.String(),
 		file:  storage,
 		ready: ready,
@@ -92,7 +92,7 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 			return
 		default:
 		}
-		conn.SetReadDeadline(time.Now().Add(readTimeout))
+		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
 		n, b, err := conn.ReadFromUDP(fBuf[:])
 		if err != nil {
 			log.Println("server ReadFromUDP error")
@@ -101,14 +101,14 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 			}
 			return
 		}
-		newfile := &gettter{ // must be a new getter every time
+		newfile := &streamToken{ // must be a new getter every time
 			id:     b.String(),
 			result: make(chan io.WriteCloser, 1),
 		}
 		defer close(newfile.result) // TODO should close on send side
 		opts.get <- newfile
 		if dest := <-newfile.result; dest != nil {
-			if n == len(magicEOF) && string(fBuf[:len(magicEOF)]) == magicEOF {
+			if n == len(hangUPEOF) && string(fBuf[:len(hangUPEOF)]) == hangUPEOF {
 				log.Println("got magicEOF finishd handle")
 				opts.del <- b.String()
 				if b.String() == opts.addr.String() {
@@ -125,12 +125,12 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 			continue
 		}
 		log.Println("new connection")
-		if n != firstLen {
+		if n != handshakeSize {
 			log.Println("new connection invalid, should send firstLen bytes")
 			return
 		}
-		var backup [firstLen]byte
-		copy(backup[:], fBuf[:firstLen])
+		var backup [handshakeSize]byte
+		copy(backup[:], fBuf[:handshakeSize])
 		newOpts := &handlerOpts{
 			addr:    b,
 			buf:     backup,
