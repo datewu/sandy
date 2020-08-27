@@ -12,10 +12,10 @@ const (
 	readUDPTimeout = 8 * time.Second
 )
 
-func globalStreams() (chan<- *udpClient, chan<- *streamToken, chan<- string) {
+func globalStreams() (chan<- *udpClient, chan<- *streamGetter, chan<- string) {
 	reqs := make(chan *udpClient)
 	filesPool := make(map[string]*udpClient)
-	getStream := make(chan *streamToken)
+	getStream := make(chan *streamGetter)
 	delStream := make(chan string)
 	go func() {
 		for {
@@ -24,16 +24,17 @@ func globalStreams() (chan<- *udpClient, chan<- *streamToken, chan<- string) {
 				if !ok {
 					return
 				}
-				filesPool[f.id] = f
-				f.ready <- struct{}{}
-			case g, ok := <-getStream:
+				filesPool[f.addr.String()] = f
+				close(f.ready)
+			case s, ok := <-getStream:
 				if !ok {
 					return
 				}
-				if r, ok := filesPool[g.id]; ok {
-					g.result <- r.file
+				if r, ok := filesPool[s.key]; ok {
+					s.result <- r.file
+				} else {
+					s.result <- nil
 				}
-				g.result <- nil
 			case id, ok := <-delStream:
 				if !ok {
 					return

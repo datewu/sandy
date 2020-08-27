@@ -1,108 +1,96 @@
 package sandy
 
 import (
-	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"time"
 )
 
-// Peanut for sandy
-type Peanut struct {
-	Protein  io.ReadCloser
-	Name     string
-	Size     int64
-	Feedback chan string
+type udpClient struct {
+	addr           *net.UDPAddr
+	file           io.WriteCloser
+	ready          chan struct{}
+	done           chan struct{}
+	buf            [handshakeSize]byte
+	stations       chan<- *udpClient
+	del            chan<- string
+	get            chan<- *streamGetter
+	siblingWriters chan io.WriteCloser
 }
 
-// Upload ...
-func Upload(server string, p *Peanut) {
-	defer func() {
-		close(p.Feedback)
-		p.Protein.Close()
-	}()
+type streamGetter struct {
+	key    string
+	result chan io.WriteCloser
+}
 
-	udpAddr, err := net.ResolveUDPAddr("udp", server)
-	if err != nil {
-		log.Println("resolve server address failed")
-		return
+// newClienthandle all Clients
+// so call it ONCE is enough
+func newClient() *udpClient {
+	pools, getter, del := globalStreams()
+	cli := &udpClient{
+		buf:      [handshakeSize]byte{},
+		stations: pools,
+		get:      getter,
+		del:      del,
 	}
+	return cli
+}
 
-	conn, err := net.DialUDP("udp", nil, udpAddr)
-	if err != nil {
-		log.Println("dialUDP failed")
-		return
-	}
-	defer func() {
-		err = conn.Close()
+func (u *udpClient) init(conn *net.UDPConn, getStorage FaceMouther) error {
+	var err error
+	if u.addr == nil {
+		conn.SetReadDeadline(time.Now().Add(5 * 12 * readUDPTimeout))
+		_, u.addr, err = conn.ReadFromUDP(u.buf[:])
 		if err != nil {
-			log.Println("client failed to close conn")
+			log.Println("readfromUDP failed")
+			return err
 		}
-	}()
-	sf := p.Name + "padding"
-	_, err = conn.Write([]byte(sf[:handshakeSize]))
-	if err != nil {
-		log.Println("conn write failed")
-		return
 	}
+	id := string(u.buf[:]) + "." + u.addr.String() + ".debug"
+	storage, err := getStorage(id)
+	if err != nil {
+		log.Println("create file failed")
+		return err
+	}
+	u.file = storage
+	return nil
+}
 
-	var rBuf [handshakeSize]byte // must receive firstLen bytes before send file
-	conn.SetReadDeadline(time.Now().Add(2 * readUDPTimeout))
-	_, _, err = conn.ReadFromUDP(rBuf[:])
-	if err != nil {
-		log.Println("readFromUDP failed")
-		return
+func (u *udpClient) spawn(addr *net.UDPAddr, bs []byte) *udpClient {
+	var backup [handshakeSize]byte
+	copy(backup[:], bs)
+	newCli := &udpClient{
+		addr:     addr,
+		buf:      backup,
+		stations: u.stations,
+		del:      u.del,
+		get:      u.get,
 	}
-	if string(rBuf[:]) != sf[:handshakeSize] {
-		log.Println("do not get 'fileName' back")
-		return
-	}
+	return newCli
+}
 
-	var progress [2]byte
-	var accumulated int64
-	size := p.Size
-	var fBuf [bufSize]byte
-	log.Println("going to send file for loop")
-	for {
-		n, err := p.Protein.Read(fBuf[:])
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				//	log.Println("going to close conn")
-				break
-			}
-			log.Println("read file err", err)
-			return
-		}
-		_, err = conn.Write(fBuf[:n])
-		if err != nil {
-			log.Println("conn write failed")
-			return
-		}
-		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
-		_, _, err = conn.ReadFromUDP(progress[:])
-		if err != nil {
-			log.Println("readFromUDP failed, cannot show progress")
-			return
-		}
-		m := bytes2Int(progress[:])
-		accumulated += int64(m)
-		p.Feedback <- fmt.Sprintf("%s: progress: %v/%v kb (%.2f%%)\r",
-			p.Name,
-			accumulated/1024,
-			size/1024,
-			100*float64(accumulated)/float64(size))
+func (u *udpClient) putWriter() {
+	u.ready = make(chan struct{})
+	u.done = make(chan struct{})
+	u.siblingWriters = make(chan io.WriteCloser)
+	u.stations <- u
+	<-u.ready
+}
+
+func (u *udpClient) getWriter(id string) io.WriteCloser {
+	if id == u.addr.String() {
+		return u.file
 	}
-	p.Feedback <- fmt.Sprintf("%s: progress: %v/%v kb (%.2f%%)\r\n",
-		p.Name,
-		accumulated/1024,
-		size/1024,
-		100*float64(accumulated)/float64(size))
-	log.Println("file send finished")
-	_, err = conn.Write([]byte(hangUPEOF))
-	if err != nil {
-		log.Println("conn read failed")
-		return
+	req := &streamGetter{
+		key:    id,
+		result: u.siblingWriters,
 	}
+	u.get <- req
+	return <-u.siblingWriters
+}
+
+func (u *udpClient) close() {
+	// u.ready, u.done has already been closed
+	close(u.siblingWriters)
 }
