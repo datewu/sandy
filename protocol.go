@@ -17,11 +17,23 @@ type streamToken struct {
 	result chan io.WriteCloser
 }
 
-type handlerOpts struct {
-	addr    *net.UDPAddr
-	buf     [handshakeSize]byte
-	storage chan<- *udpClient
-	get     chan<- *streamToken
-	del     chan<- string
-	done    chan struct{}
+type clientsStream struct {
+	addr     *net.UDPAddr
+	buf      [handshakeSize]byte
+	stations chan<- *udpClient
+	get      chan<- *streamToken
+	del      chan<- string
+}
+
+// newClientsSteam handle all Clients
+// so call it ONCE is enough
+func newClientsStream() *clientsStream {
+	pools, getter, del := globalStreams()
+	ss := &clientsStream{
+		buf:      [handshakeSize]byte{},
+		stations: pools,
+		get:      getter,
+		del:      del,
+	}
+	return ss
 }

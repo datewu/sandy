@@ -28,41 +28,36 @@ func Server(addr string, getStorage FaceMouther) {
 		log.Println("listen failed")
 		return
 	}
-	requests, getter, del := globalStreams()
+	streams := newClientsStream()
 	defer func() {
-		close(requests)
-		close(getter)
-		close(del)
+		close(streams.stations)
+		close(streams.get)
+		close(streams.del)
 	}()
-	opts := &handlerOpts{
-		buf:     [handshakeSize]byte{},
-		storage: requests,
-		get:     getter,
-		del:     del,
-	}
+
 	for {
-		opts.addr = nil
-		opts.buf = [handshakeSize]byte{}
-		go handleUPload(conn, opts, getStorage)
+		streams.addr = nil
+		streams.buf = [handshakeSize]byte{}
+		go handleUPload(conn, streams, getStorage)
 		globalForWG.Add(1)
 		globalForWG.Wait()
 	}
 }
 
-func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) {
+func handleUPload(conn *net.UDPConn, stream *clientsStream, getStorage FaceMouther) {
 	defer func() {
 		globalForWG.Done()
 	}()
 	var err error
-	if opts.addr == nil {
+	if stream.addr == nil {
 		conn.SetReadDeadline(time.Now().Add(5 * 12 * readUDPTimeout))
-		_, opts.addr, err = conn.ReadFromUDP(opts.buf[:])
+		_, stream.addr, err = conn.ReadFromUDP(stream.buf[:])
 		if err != nil {
 			log.Println("readfromUDP failed")
 			return
 		}
 	}
-	id := string(opts.buf[:]) + "." + opts.addr.String() + ".debug"
+	id := string(stream.buf[:]) + "." + stream.addr.String() + ".debug"
 	storage, err := getStorage(id)
 	if err != nil {
 		log.Println("create file failed")
@@ -73,19 +68,23 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 	ready := make(chan struct{})
 	defer close(ready) // TODO should close on send side
 	done := make(chan struct{})
-	opts.storage <- &udpClient{
-		id:    opts.addr.String(),
+	stream.stations <- &udpClient{
+		id:    stream.addr.String(),
 		file:  storage,
 		ready: ready,
 		done:  done,
 	}
 	<-ready
-	_, err = conn.WriteToUDP(opts.buf[:], opts.addr)
+	_, err = conn.WriteToUDP(stream.buf[:], stream.addr)
 	if err != nil {
 		log.Println("server writetoUDP failed")
 		return
 	}
 	var fBuf [bufSize]byte
+	token := &streamToken{
+		result: make(chan io.WriteCloser, 1),
+	}
+	defer close(token.result) // TODO should close on send side
 	for {
 		select {
 		case <-done:
@@ -101,17 +100,13 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 			}
 			return
 		}
-		newfile := &streamToken{ // must be a new getter every time
-			id:     b.String(),
-			result: make(chan io.WriteCloser, 1),
-		}
-		defer close(newfile.result) // TODO should close on send side
-		opts.get <- newfile
-		if dest := <-newfile.result; dest != nil {
+		token.id = b.String()
+		stream.get <- token
+		if dest := <-token.result; dest != nil {
 			if n == len(hangUPEOF) && string(fBuf[:len(hangUPEOF)]) == hangUPEOF {
 				log.Println("got magicEOF finishd handle")
-				opts.del <- b.String()
-				if b.String() == opts.addr.String() {
+				stream.del <- b.String()
+				if b.String() == stream.addr.String() {
 					return
 				}
 				continue
@@ -131,12 +126,12 @@ func handleUPload(conn *net.UDPConn, opts *handlerOpts, getStorage FaceMouther) 
 		}
 		var backup [handshakeSize]byte
 		copy(backup[:], fBuf[:handshakeSize])
-		newOpts := &handlerOpts{
-			addr:    b,
-			buf:     backup,
-			storage: opts.storage,
-			get:     opts.get,
-			del:     opts.del,
+		newOpts := &clientsStream{
+			addr:     b,
+			buf:      backup,
+			stations: stream.stations,
+			get:      stream.get,
+			del:      stream.del,
 		}
 		globalForWG.Add(1)
 		go handleUPload(conn, newOpts, getStorage)
