@@ -41,7 +41,7 @@ func Upload(server string, p *Peanut) {
 			log.Println("client failed to close conn")
 		}
 	}()
-	sf := p.Name + "padding"
+	sf := pad2Size(p.Name, handshakeSize)
 	_, err = conn.Write([]byte(sf[:handshakeSize]))
 	if err != nil {
 		log.Println("conn write failed")
