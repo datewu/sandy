@@ -18,6 +18,6 @@ sleep $time
 for i in `ls . | grep -v .debug` ;
 do
     echo -n "$i "
-    diff $i ${i:0:8}*.debug
+    diff $i ${i:0:64}*.debug
     echo $?
 done

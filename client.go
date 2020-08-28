@@ -8,36 +8,26 @@ import (
 )
 
 type udpClient struct {
-	addr           *net.UDPAddr
-	file           io.WriteCloser
-	ready          chan struct{}
-	done           chan struct{}
-	buf            [handshakeSize]byte
-	stations       chan<- *udpClient
-	del            chan<- string
-	get            chan<- *streamGetter
-	siblingWriters chan io.WriteCloser
-}
-
-type streamGetter struct {
-	key    string
-	result chan io.WriteCloser
+	addr   *net.UDPAddr
+	file   io.WriteCloser
+	ready  chan struct{}
+	done   chan struct{}
+	buf    [handshakeSize]byte
+	keeper *bookKeeper
 }
 
 // newClienthandle all Clients
+// root client can spawn a lot
 // so call it ONCE is enough
-func newClient() *udpClient {
-	pools, getter, del := globalStreams()
+func newClient(k *bookKeeper) *udpClient {
 	cli := &udpClient{
-		buf:      [handshakeSize]byte{},
-		stations: pools,
-		get:      getter,
-		del:      del,
+		buf:    [handshakeSize]byte{},
+		keeper: k,
 	}
 	return cli
 }
 
-func (u *udpClient) init(conn *net.UDPConn, getStorage FaceMouther) error {
+func (u *udpClient) initWriter(conn *net.UDPConn, getStorage FaceMouther) error {
 	var err error
 	if u.addr == nil {
 		conn.SetReadDeadline(time.Now().Add(5 * 12 * readUDPTimeout))
@@ -61,20 +51,17 @@ func (u *udpClient) spawn(addr *net.UDPAddr, bs []byte) *udpClient {
 	var backup [handshakeSize]byte
 	copy(backup[:], bs)
 	newCli := &udpClient{
-		addr:     addr,
-		buf:      backup,
-		stations: u.stations,
-		del:      u.del,
-		get:      u.get,
+		addr:   addr,
+		buf:    backup,
+		keeper: u.keeper,
 	}
 	return newCli
 }
 
-func (u *udpClient) putWriter() {
+func (u *udpClient) registry() {
 	u.ready = make(chan struct{})
 	u.done = make(chan struct{})
-	u.siblingWriters = make(chan io.WriteCloser)
-	u.stations <- u
+	u.keeper.add(u)
 	<-u.ready
 }
 
@@ -82,14 +69,5 @@ func (u *udpClient) getWriter(id string) io.WriteCloser {
 	if id == u.addr.String() {
 		return u.file
 	}
-	req := &streamGetter{
-		key:    id,
-		result: u.siblingWriters,
-	}
-	u.get <- req
-	return <-u.siblingWriters
-}
-
-func (u *udpClient) close() {
-	close(u.siblingWriters)
+	return u.keeper.getWriter(id)
 }

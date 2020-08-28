@@ -28,12 +28,11 @@ func Serve(addr string, getStorage FaceMouther) {
 		log.Println("listen failed")
 		return
 	}
-	rootCli := newClient()
-	defer func() {
-		close(rootCli.stations)
-		close(rootCli.get)
-		close(rootCli.del)
-	}()
+	// only one bookkeeper is more than enouth
+	// though there can be more bookkerrpers
+	k := newBookKeeper()
+	defer k.destroy()
+	rootCli := newClient(k)
 	for {
 		rootCli.addr = nil
 		rootCli.buf = [handshakeSize]byte{}
@@ -47,14 +46,13 @@ func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 	defer func() {
 		globalForWG.Done()
 	}()
-	err := cli.init(conn, getStorage)
+	err := cli.initWriter(conn, getStorage)
 	if err != nil {
 		return
 	}
 	defer cli.file.Close()
 	log.Println("about to receive file")
-	cli.putWriter()
-	defer cli.close()
+	cli.registry()
 	_, err = conn.WriteToUDP(cli.buf[:], cli.addr)
 	if err != nil {
 		log.Println("server writetoUDP failed")
@@ -78,7 +76,7 @@ func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 		}
 		if n == len(hangUPEOF) && string(fBuf[:len(hangUPEOF)]) == hangUPEOF {
 			log.Println("got magicEOF finishd handle")
-			cli.del <- b.String()
+			cli.keeper.remove(b.String())
 			if b.String() == cli.addr.String() {
 				return
 			}
