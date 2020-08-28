@@ -91,6 +91,5 @@ func (u *udpClient) getWriter(id string) io.WriteCloser {
 }
 
 func (u *udpClient) close() {
-	// u.ready, u.done has already been closed
 	close(u.siblingWriters)
 }

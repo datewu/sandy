@@ -17,7 +17,7 @@ type Peanut struct {
 	Feedback chan string
 }
 
-// Upload ...
+// Upload feed sandy
 func Upload(server string, p *Peanut) {
 	defer func() {
 		close(p.Feedback)
@@ -48,7 +48,7 @@ func Upload(server string, p *Peanut) {
 		return
 	}
 
-	var rBuf [handshakeSize]byte // must receive firstLen bytes before send file
+	var rBuf [handshakeSize]byte // must receive handshake bytes before send file
 	conn.SetReadDeadline(time.Now().Add(2 * readUDPTimeout))
 	_, _, err = conn.ReadFromUDP(rBuf[:])
 	if err != nil {
@@ -56,7 +56,7 @@ func Upload(server string, p *Peanut) {
 		return
 	}
 	if string(rBuf[:]) != sf[:handshakeSize] {
-		log.Println("do not get 'fileName' back")
+		log.Println("do not get 'handshake' back")
 		return
 	}
 
@@ -69,7 +69,6 @@ func Upload(server string, p *Peanut) {
 		n, err := p.Protein.Read(fBuf[:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				//	log.Println("going to close conn")
 				break
 			}
 			log.Println("read file err", err)

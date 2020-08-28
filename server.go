@@ -16,8 +16,8 @@ var (
 // FaceMouther is a face or a mouth, i cannnot tell
 type FaceMouther func(id string) (io.WriteCloser, error)
 
-// Server ready for infinity Peanuts
-func Server(addr string, getStorage FaceMouther) {
+// Serve ready for infinity Peanuts
+func Serve(addr string, getStorage FaceMouther) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		log.Println("resolve add failed")

@@ -29,7 +29,7 @@ func server() {
 	face := func(fileName string) (io.WriteCloser, error) {
 		return os.Create(fileName)
 	}
-	sandy.Server(*addr, face)
+	sandy.Serve(*addr, face)
 }
 
 func client() {
@@ -57,6 +57,5 @@ func client() {
 	go sandy.Upload(*addr, p)
 	for msg := range p.Feedback {
 		fmt.Print(msg)
-		//fmt.Println(msg)
 	}
 }

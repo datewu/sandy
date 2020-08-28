@@ -2,8 +2,9 @@
 
 go build
 
+# donot run this on background
 #./cmd -s &
- 
+
 rm *.debug
 for i in `ls .`;
 do
