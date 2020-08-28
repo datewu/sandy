@@ -30,7 +30,7 @@ func pad2Size(s string, size int) string {
 	if sSize >= size {
 		return s[:size]
 	}
-	text := "padding"
+	text := ".pad"
 	padding := strings.Repeat(text, (size-sSize)/len(text)+1)
-	return padding[:size]
+	return (s + padding)[:size]
 }

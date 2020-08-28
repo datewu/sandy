@@ -18,6 +18,7 @@ sleep $time
 for i in `ls . | grep -v .debug` ;
 do
     echo -n "$i "
-    diff $i ${i:0:32}*.debug
+    # sync this 16 to ../helper.go#handshakeSize
+    diff $i ${i:0:16}*.debug
     echo $?
 done
