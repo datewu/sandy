@@ -43,15 +43,12 @@ func Serve(addr string, getStorage FaceMouther) {
 }
 
 func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
-	defer func() {
-		globalForWG.Done()
-	}()
+	defer globalForWG.Done()
 	err := cli.initWriter(conn, getStorage)
 	if err != nil {
 		return
 	}
 	defer cli.file.Close()
-	log.Println("about to receive file")
 	cli.registry()
 	_, err = conn.WriteToUDP(cli.buf[:], cli.addr)
 	if err != nil {
@@ -92,7 +89,6 @@ func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 			conn.WriteToUDP(int2Bytes(n), b)
 			continue
 		}
-		log.Println("new connection")
 		if n != handshakeSize {
 			log.Println("new connection invalid, should send firstLen bytes")
 			return

@@ -64,7 +64,6 @@ func Upload(server string, p *Peanut) {
 	var accumulated int64
 	size := p.Size
 	var fBuf [bufSize]byte
-	log.Println("going to send file for loop")
 	for {
 		n, err := p.Protein.Read(fBuf[:])
 		if err != nil {
@@ -98,7 +97,6 @@ func Upload(server string, p *Peanut) {
 		accumulated/1024,
 		size/1024,
 		100*float64(accumulated)/float64(size))
-	log.Println("file send finished")
 	_, err = conn.Write([]byte(hangUPEOF))
 	if err != nil {
 		log.Println("conn read failed")
