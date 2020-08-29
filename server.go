@@ -14,7 +14,7 @@ var (
 )
 
 // FaceMouther is a face or a mouth, i cannnot tell
-type FaceMouther func(id string) (io.WriteCloser, error)
+type FaceMouther func(name string, connID string) (io.WriteCloser, error)
 
 // Serve ready for infinity Peanuts
 func Serve(addr string, getStorage FaceMouther) {

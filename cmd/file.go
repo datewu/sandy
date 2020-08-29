@@ -26,8 +26,8 @@ func main() {
 }
 
 func server() {
-	face := func(fileName string) (io.WriteCloser, error) {
-		return os.Create(fileName)
+	face := func(fileName string, id string) (io.WriteCloser, error) {
+		return os.Create(fileName + "." + id + ".debug")
 	}
 	sandy.Serve(*addr, face)
 }

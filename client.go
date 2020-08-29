@@ -41,8 +41,8 @@ func (u *udpClient) initHandshake(conn *net.UDPConn, getStorage FaceMouther) err
 	if n == 0 {
 		n = len(u.buf)
 	}
-	id := string(decodeHandshake(u.buf[:n])) + "." + u.addr.String() + ".debug"
-	storage, err := getStorage(id)
+	hiMsg := string(decodeHandshake(u.buf[:n]))
+	storage, err := getStorage(hiMsg, u.addr.String())
 	if err != nil {
 		log.Println("create file failed", err)
 		return err
