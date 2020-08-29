@@ -2,15 +2,16 @@ package sandy
 
 import (
 	"encoding/binary"
-	"strings"
 	"time"
 )
 
 const (
-	hangUPEOF      = `E"@i桐O*4🈚️'F`
-	handshakeSize  = 16
-	bufSize        = 1024
-	readUDPTimeout = 8 * time.Second
+	hangUPEOF        = `E"@i桐O*4🈚️'F`
+	handshakeTailLen = 1
+	magicTail        = byte(255)
+	maxHandshakeSize = (255 + 1) * handshakeTailLen
+	bufSize          = 1024
+	readUDPTimeout   = 8 * time.Second
 )
 
 func int2Bytes(num int) []byte {
@@ -25,12 +26,40 @@ func bytes2Int(bs []byte) int {
 	return int(n)
 }
 
-func pad2Size(s string, size int) string {
-	sSize := len(s)
-	if sSize >= size {
-		return s[:size]
+func encodeHandshake(bs []byte) []byte {
+	if len(bs) < 1 {
+		return nil
 	}
-	text := ".pad"
-	padding := strings.Repeat(text, (size-sSize)/len(text)+1)
-	return (s + padding)[:size]
+	tail := byte(len(bs))
+	return append(bs, magicTail, tail)
 }
+
+func decodeHandshake(bs []byte) []byte {
+	if len(bs) < 3 {
+		return nil
+	}
+	size := int(bs[len(bs)-1])
+	return bs[0:size]
+}
+
+func isHandshake(bs []byte) bool {
+	if len(bs) < 3 {
+		return false
+	}
+	total := len(bs)
+	size := int(bs[total-1])
+	if bs[total-2] != magicTail {
+		return false
+	}
+	return size+2 == total
+}
+
+// func pad2Size(s string, size int) string {
+// 	sSize := len(s)
+// 	if sSize >= size {
+// 		return s[:size]
+// 	}
+// 	text := ".pad"
+// 	padding := strings.Repeat(text, (size-sSize)/len(text)+1)
+// 	return (s + padding)[:size]
+// }

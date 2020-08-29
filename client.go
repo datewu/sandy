@@ -12,7 +12,7 @@ type udpClient struct {
 	file   io.WriteCloser
 	ready  chan struct{}
 	done   chan struct{}
-	buf    [handshakeSize]byte
+	buf    []byte
 	keeper *bookKeeper
 }
 
@@ -21,34 +21,44 @@ type udpClient struct {
 // so call it ONCE is enough
 func newClient(k *bookKeeper) *udpClient {
 	cli := &udpClient{
-		buf:    [handshakeSize]byte{},
+		buf:    make([]byte, maxHandshakeSize),
 		keeper: k,
 	}
 	return cli
 }
 
-func (u *udpClient) initWriter(conn *net.UDPConn, getStorage FaceMouther) error {
+func (u *udpClient) initHandshake(conn *net.UDPConn, getStorage FaceMouther) error {
 	var err error
+	var n int
 	if u.addr == nil {
 		conn.SetReadDeadline(time.Now().Add(5 * 12 * readUDPTimeout))
-		_, u.addr, err = conn.ReadFromUDP(u.buf[:])
+		n, u.addr, err = conn.ReadFromUDP(u.buf[:])
 		if err != nil {
-			log.Println("readfromUDP failed")
+			log.Println("readfromUDP failed", err)
 			return err
 		}
 	}
-	id := string(u.buf[:]) + "." + u.addr.String() + ".debug"
+	if n == 0 {
+		n = len(u.buf)
+	}
+	id := string(decodeHandshake(u.buf[:n])) + "." + u.addr.String() + ".debug"
 	storage, err := getStorage(id)
 	if err != nil {
-		log.Println("create file failed")
+		log.Println("create file failed", err)
 		return err
 	}
 	u.file = storage
-	return nil
+	u.registry()
+
+	_, err = conn.WriteToUDP(u.buf[:n], u.addr)
+	if err != nil {
+		log.Println("server writetoUDP failed", err)
+	}
+	return err
 }
 
 func (u *udpClient) spawn(addr *net.UDPAddr, bs []byte) *udpClient {
-	var backup [handshakeSize]byte
+	backup := make([]byte, len(bs))
 	copy(backup[:], bs)
 	newCli := &udpClient{
 		addr:   addr,

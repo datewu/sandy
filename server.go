@@ -20,7 +20,7 @@ type FaceMouther func(id string) (io.WriteCloser, error)
 func Serve(addr string, getStorage FaceMouther) {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
-		log.Println("resolve add failed")
+		log.Println("resolve add failed", err)
 		return
 	}
 	conn, err := net.ListenUDP("udp", udpAddr)
@@ -35,7 +35,7 @@ func Serve(addr string, getStorage FaceMouther) {
 	rootCli := newClient(k)
 	for {
 		rootCli.addr = nil
-		rootCli.buf = [handshakeSize]byte{}
+		rootCli.buf = make([]byte, maxHandshakeSize)
 		go handleUPload(conn, rootCli, getStorage)
 		globalForWG.Add(1)
 		globalForWG.Wait()
@@ -44,17 +44,11 @@ func Serve(addr string, getStorage FaceMouther) {
 
 func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 	defer globalForWG.Done()
-	err := cli.initWriter(conn, getStorage)
+	err := cli.initHandshake(conn, getStorage)
 	if err != nil {
 		return
 	}
 	defer cli.file.Close()
-	cli.registry()
-	_, err = conn.WriteToUDP(cli.buf[:], cli.addr)
-	if err != nil {
-		log.Println("server writetoUDP failed")
-		return
-	}
 	var fBuf [bufSize]byte
 	for {
 		select {
@@ -65,7 +59,7 @@ func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
 		n, b, err := conn.ReadFromUDP(fBuf[:])
 		if err != nil {
-			log.Println("server ReadFromUDP error")
+			log.Println("server ReadFromUDP error", err)
 			if errors.Is(err, io.EOF) {
 				break
 			}
@@ -83,17 +77,20 @@ func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 		if dest := cli.getWriter(b.String()); dest != nil {
 			_, err = dest.Write(fBuf[:n])
 			if err != nil {
-				log.Println("write to file failed")
+				log.Println("write to file failed", err)
 				return
 			}
 			conn.WriteToUDP(int2Bytes(n), b)
 			continue
 		}
-		if n != handshakeSize {
-			log.Println("new connection invalid, should send firstLen bytes")
+		if !isHandshake(fBuf[:n]) {
+			if n > 80 {
+				n = 80
+			}
+			log.Println("new connection invalid, isHandshake false", string(fBuf[:n]))
 			return
 		}
-		newCli := cli.spawn(b, fBuf[:handshakeSize])
+		newCli := cli.spawn(b, fBuf[:n])
 		globalForWG.Add(1)
 		go handleUPload(conn, newCli, getStorage)
 	}

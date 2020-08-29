@@ -26,37 +26,37 @@ func Upload(server string, p *Peanut) {
 
 	udpAddr, err := net.ResolveUDPAddr("udp", server)
 	if err != nil {
-		log.Println("resolve server address failed")
+		log.Println("resolve server address failed", err)
 		return
 	}
 
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
-		log.Println("dialUDP failed")
+		log.Println("dialUDP failed", err)
 		return
 	}
 	defer func() {
 		err = conn.Close()
 		if err != nil {
-			log.Println("client failed to close conn")
+			log.Println("client failed to close conn", err)
 		}
 	}()
-	sf := pad2Size(p.Name, handshakeSize)
-	_, err = conn.Write([]byte(sf[:handshakeSize]))
+	hs := encodeHandshake([]byte(p.Name))
+	n, err := conn.Write(hs)
 	if err != nil {
 		log.Println("conn write failed")
 		return
 	}
 
-	var rBuf [handshakeSize]byte // must receive handshake bytes before send file
+	rBuf := make([]byte, n)
 	conn.SetReadDeadline(time.Now().Add(2 * readUDPTimeout))
-	_, _, err = conn.ReadFromUDP(rBuf[:])
+	m, _, err := conn.ReadFromUDP(rBuf[:])
 	if err != nil {
-		log.Println("readFromUDP failed")
+		log.Println("readFromUDP failed", err)
 		return
 	}
-	if string(rBuf[:]) != sf[:handshakeSize] {
-		log.Println("do not get 'handshake' back")
+	if m != n || string(rBuf) != string(hs) {
+		log.Println("do not get 'handshake' back, handshake failed")
 		return
 	}
 
@@ -75,13 +75,13 @@ func Upload(server string, p *Peanut) {
 		}
 		_, err = conn.Write(fBuf[:n])
 		if err != nil {
-			log.Println("conn write failed")
+			log.Println("conn write failed", err)
 			return
 		}
 		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
 		_, _, err = conn.ReadFromUDP(progress[:])
 		if err != nil {
-			log.Println("readFromUDP failed, cannot show progress")
+			log.Println("readFromUDP failed, cannot show progress", err)
 			return
 		}
 		m := bytes2Int(progress[:])
@@ -99,7 +99,7 @@ func Upload(server string, p *Peanut) {
 		100*float64(accumulated)/float64(size))
 	_, err = conn.Write([]byte(hangUPEOF))
 	if err != nil {
-		log.Println("conn read failed")
+		log.Println("conn read failed", err)
 		return
 	}
 }
