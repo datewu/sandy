@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log"
 	"os"
 
 	"github.com/datewu/sandy"
@@ -54,7 +55,12 @@ func client() {
 		Size:     info.Size(),
 		Feedback: make(chan string),
 	}
-	go sandy.Upload(*addr, p)
+	go func() {
+		err := sandy.Upload(*addr, p)
+		if err != nil {
+			log.Println("upload failed", err)
+		}
+	}()
 	for msg := range p.Feedback {
 		fmt.Print(msg)
 	}

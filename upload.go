@@ -18,7 +18,7 @@ type Peanut struct {
 }
 
 // Upload feed sandy
-func Upload(server string, p *Peanut) {
+func Upload(server string, p *Peanut) error {
 	defer func() {
 		close(p.Feedback)
 		p.Protein.Close()
@@ -27,25 +27,20 @@ func Upload(server string, p *Peanut) {
 	udpAddr, err := net.ResolveUDPAddr("udp", server)
 	if err != nil {
 		log.Println("resolve server address failed", err)
-		return
+		return err
 	}
 
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {
 		log.Println("dialUDP failed", err)
-		return
+		return err
 	}
-	defer func() {
-		err = conn.Close()
-		if err != nil {
-			log.Println("client failed to close conn", err)
-		}
-	}()
+	defer conn.Close()
 	hs := encodeHandshake([]byte(p.Name))
 	n, err := conn.Write(hs)
 	if err != nil {
 		log.Println("conn write failed")
-		return
+		return err
 	}
 
 	rBuf := make([]byte, n)
@@ -53,11 +48,11 @@ func Upload(server string, p *Peanut) {
 	m, _, err := conn.ReadFromUDP(rBuf[:])
 	if err != nil {
 		log.Println("readFromUDP failed", err)
-		return
+		return err
 	}
 	if m != n || string(rBuf) != string(hs) {
 		log.Println("do not get 'handshake' back, handshake failed")
-		return
+		return err
 	}
 
 	var progress [2]byte
@@ -71,18 +66,18 @@ func Upload(server string, p *Peanut) {
 				break
 			}
 			log.Println("read file err", err)
-			return
+			return err
 		}
 		_, err = conn.Write(fBuf[:n])
 		if err != nil {
 			log.Println("conn write failed", err)
-			return
+			return err
 		}
 		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
 		_, _, err = conn.ReadFromUDP(progress[:])
 		if err != nil {
 			log.Println("readFromUDP failed, cannot show progress", err)
-			return
+			return err
 		}
 		m := bytes2Int(progress[:])
 		accumulated += int64(m)
@@ -98,8 +93,5 @@ func Upload(server string, p *Peanut) {
 		size/1024,
 		100*float64(accumulated)/float64(size))
 	_, err = conn.Write([]byte(hangUPEOF))
-	if err != nil {
-		log.Println("conn read failed", err)
-		return
-	}
+	return err
 }

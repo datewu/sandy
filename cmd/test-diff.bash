@@ -2,8 +2,8 @@
 
 go build
 
-# donot run this on background
-#./cmd -s &
+# run server on another terminal
+#./cmd -s
 
 rm *.debug
 for i in `ls .`;
@@ -12,8 +12,8 @@ do
     ./cmd $i &
 done
 
-time=${1-"3"} # default 3
-sleep $time
+duration=${1-"2"} # default 2
+sleep $duration
 
 for i in `ls . | grep -v .debug` ;
 do
