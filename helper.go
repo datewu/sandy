@@ -8,7 +8,7 @@ import (
 const (
 	hangUPEOF        = `E"@⬆️桐👋*™🈚️'F`
 	handshakeTailLen = 1
-	magicTail        = byte(255)
+	magicTail        = 255
 	maxHandshakeSize = (255 + 1) * handshakeTailLen
 	bufSize          = 1024
 	readUDPTimeout   = 8 * time.Second
@@ -53,13 +53,3 @@ func isHandshake(bs []byte) bool {
 	}
 	return size+2 == total
 }
-
-// func pad2Size(s string, size int) string {
-// 	sSize := len(s)
-// 	if sSize >= size {
-// 		return s[:size]
-// 	}
-// 	text := ".pad"
-// 	padding := strings.Repeat(text, (size-sSize)/len(text)+1)
-// 	return (s + padding)[:size]
-// }

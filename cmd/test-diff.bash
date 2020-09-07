@@ -12,13 +12,12 @@ do
     ./cmd $i &
 done
 
-duration=${1-"2"} # default 2
+duration=${1-"1"} # default 1
 sleep $duration
 
 for i in `ls . | grep -v .debug` ;
 do
     echo -n "$i "
-    # sync this 16 to ../helper.go#handshakeSize
     diff $i ${i:0:16}*.debug
     echo $?
 done
