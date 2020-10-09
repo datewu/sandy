@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	hangUPEOF        = `E"@⬆️桐👋*™🈚️'F`
+	hangUPEOF        = `¡"¶⬆️桐👋*™🈚️'¬¢`
 	handshakeTailLen = 1
 	magicTail        = 255
 	maxHandshakeSize = (255 + 1) * handshakeTailLen
