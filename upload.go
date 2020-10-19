@@ -59,6 +59,8 @@ func Upload(server string, p *Peanut) error {
 	var accumulated int64
 	size := p.Size
 	var fBuf [bufSize]byte
+	t := time.NewTicker(3000 * time.Millisecond)
+	defer t.Stop()
 	for {
 		n, err := p.Protein.Read(fBuf[:])
 		if err != nil {
@@ -81,11 +83,15 @@ func Upload(server string, p *Peanut) error {
 		}
 		m := bytes2Int(progress[:])
 		accumulated += int64(m)
-		p.Feedback <- fmt.Sprintf("%s: progress: %v/%v kb (%.2f%%)\r",
-			p.Name,
-			accumulated/1024,
-			size/1024,
-			100*float64(accumulated)/float64(size))
+		select {
+		case <-t.C:
+			p.Feedback <- fmt.Sprintf("%s: progress: %v/%v kb (%.2f%%)\r",
+				p.Name,
+				accumulated/1024,
+				size/1024,
+				100*float64(accumulated)/float64(size))
+		default:
+		}
 	}
 	p.Feedback <- fmt.Sprintf("%s: progress: %v/%v kb (%.2f%%)\r\n",
 		p.Name,
