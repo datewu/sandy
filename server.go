@@ -9,20 +9,18 @@ import (
 	"time"
 )
 
-var (
-	globalForWG sync.WaitGroup
-)
-
 // FaceMouther is a face or a mouth, i cannnot tell
 type FaceMouther func(name string, connID string) (io.WriteCloser, error)
 
 // Serve ready for infinity Peanuts
 func Serve(addr string, getStorage FaceMouther) {
+	var wg sync.WaitGroup
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		log.Println("resolve add failed", err)
 		return
 	}
+	log.Println("listen on", addr)
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		log.Println("listen failed")
@@ -36,14 +34,14 @@ func Serve(addr string, getStorage FaceMouther) {
 	for {
 		rootCli.addr = nil
 		rootCli.buf = make([]byte, maxHandshakeSize)
-		go handleUPload(conn, rootCli, getStorage)
-		globalForWG.Add(1)
-		globalForWG.Wait()
+		go handleUPload(&wg, conn, rootCli, getStorage)
+		wg.Add(1)
+		wg.Wait()
 	}
 }
 
-func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
-	defer globalForWG.Done()
+func handleUPload(wg *sync.WaitGroup, conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
+	defer wg.Done()
 	err := cli.initHandshake(conn, getStorage)
 	if err != nil {
 		return
@@ -91,7 +89,7 @@ func handleUPload(conn *net.UDPConn, cli *udpClient, getStorage FaceMouther) {
 			return
 		}
 		newCli := cli.spawn(b, fBuf[:n])
-		globalForWG.Add(1)
-		go handleUPload(conn, newCli, getStorage)
+		wg.Add(1)
+		go handleUPload(wg, conn, newCli, getStorage)
 	}
 }
