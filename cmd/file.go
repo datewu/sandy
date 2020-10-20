@@ -38,7 +38,7 @@ func server() {
 		}
 		pprof.StartCPUProfile(f)
 		go func() {
-			time.Sleep(10 * time.Minute)
+			time.Sleep(2 * time.Minute)
 			pprof.StopCPUProfile()
 		}()
 	}

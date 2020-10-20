@@ -55,7 +55,6 @@ func Upload(server string, p *Peanut) error {
 		return err
 	}
 
-	var progress [2]byte
 	var accumulated int64
 	size := p.Size
 	var fBuf [bufSize]byte
@@ -70,18 +69,11 @@ func Upload(server string, p *Peanut) error {
 			log.Println("read file err", err)
 			return err
 		}
-		_, err = conn.Write(fBuf[:n])
+		m, err := conn.Write(fBuf[:n])
 		if err != nil {
 			log.Println("conn write failed", err)
 			return err
 		}
-		conn.SetReadDeadline(time.Now().Add(readUDPTimeout))
-		_, _, err = conn.ReadFromUDP(progress[:])
-		if err != nil {
-			log.Println("readFromUDP failed, cannot show progress", err)
-			return err
-		}
-		m := bytes2Int(progress[:])
 		accumulated += int64(m)
 		select {
 		case <-t.C:

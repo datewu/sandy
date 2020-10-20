@@ -1,7 +1,6 @@
 package sandy
 
 import (
-	"encoding/binary"
 	"time"
 )
 
@@ -13,18 +12,6 @@ const (
 	bufSize          = 1024
 	readUDPTimeout   = 8 * time.Second
 )
-
-func int2Bytes(num int) []byte {
-	bs := make([]byte, 2)
-	n := uint16(num)
-	binary.LittleEndian.PutUint16(bs, n)
-	return bs
-}
-
-func bytes2Int(bs []byte) int {
-	n := binary.LittleEndian.Uint16(bs)
-	return int(n)
-}
 
 func encodeHandshake(bs []byte) []byte {
 	if len(bs) < 1 {
