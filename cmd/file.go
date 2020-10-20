@@ -6,13 +6,17 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime/pprof"
+	"time"
 
 	"github.com/datewu/sandy"
 )
 
 var (
-	addr       = flag.String("addr", ":1200", "server udp address")
-	serverMode = flag.Bool("s", false, "runing mode, default as client mode")
+	addr             = flag.String("addr", ":1200", "server udp address")
+	serverMode       = flag.Bool("s", false, "runing mode, default as client mode")
+	serverCpuprofile = flag.String("scpu", "", "write cpu profile to file")
+	cliCpuprofile    = flag.String("ccpu", "", "write cpu profile to file")
 )
 
 func main() {
@@ -27,6 +31,17 @@ func main() {
 }
 
 func server() {
+	if *serverCpuprofile != "" {
+		f, err := os.Create(*serverCpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		go func() {
+			time.Sleep(10 * time.Minute)
+			pprof.StopCPUProfile()
+		}()
+	}
 	face := func(fileName string, id string) (io.WriteCloser, error) {
 		return os.Create(fileName + "." + id + ".debug")
 	}
@@ -34,12 +49,20 @@ func server() {
 }
 
 func client() {
-	if len(os.Args) < 2 {
+	if *cliCpuprofile != "" {
+		f, err := os.Create(*cliCpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+	if len(flag.Args()) != 1 {
 		panic("no file; no peanut; no protein")
 	}
 	// one peanut a time, sandy.
 	// only one peanut for test
-	fName := os.Args[1]
+	fName := flag.Args()[0]
 	f, err := os.Open(fName)
 	if err != nil {
 		panic(err)

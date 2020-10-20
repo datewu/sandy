@@ -1,2 +1,3 @@
 cmd/cmd*
 cmd/*.debug
+cmd/cpuprofile
