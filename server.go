@@ -78,6 +78,7 @@ func handleUPload(wg *sync.WaitGroup, conn *net.UDPConn, cli *udpClient, getStor
 				log.Println("write to file failed", err)
 				return
 			}
+			conn.WriteToUDP([]byte{'='}, b)
 			continue
 		}
 		if !isHandshake(fBuf[:n]) {
